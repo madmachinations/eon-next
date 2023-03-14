@@ -12,7 +12,7 @@ import homeassistant.helpers.config_validation as cv
 
 from .eonnext import EonNext
 
-from . import DOMAIN, CONF_REFRESH_TOKEN
+from . import DOMAIN, CONF_EMAIL, CONF_PASSWORD
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,21 +34,22 @@ class EonNextConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             en = EonNext()
             success = await en.login_with_username_and_password(
-                user_input['email'],
-                user_input['password'],
+                user_input[CONF_EMAIL],
+                user_input[CONF_PASSWORD],
                 False
             )
 
             if success == True:
 
                 return self.async_create_entry(title="Eon Next", data={
-                    CONF_REFRESH_TOKEN: en.auth['refresh']['token']
+                    CONF_EMAIL: user_input[CONF_EMAIL],
+                    CONF_PASSWORD: user_input[CONF_PASSWORD]
                 })
                 
             else:
                 errors["base"] = "invalid_auth"
 
         return self.async_show_form(step_id="user", data_schema=vol.Schema({
-            vol.Required("email"): cv.string,
-            vol.Required("password"): cv.string
+            vol.Required(CONF_EMAIL): cv.string,
+            vol.Required(CONF_PASSWORD): cv.string
         }), errors=errors)

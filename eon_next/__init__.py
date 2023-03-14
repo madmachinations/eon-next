@@ -6,7 +6,8 @@ from .eonnext import EonNext
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "eon_next"
-CONF_REFRESH_TOKEN = "refresh_token"
+CONF_EMAIL = "email"
+CONF_PASSWORD = "password"
 
 
 async def async_setup_entry(hass, entry):
@@ -14,7 +15,7 @@ async def async_setup_entry(hass, entry):
     hass.data.setdefault(DOMAIN, {})
 
     api = EonNext()
-    success = await api.login_with_refresh_token(entry.data[CONF_REFRESH_TOKEN])
+    success = await api.login_with_username_and_password(entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD])
 
     if success == True:
 
