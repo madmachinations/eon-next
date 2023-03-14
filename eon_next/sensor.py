@@ -67,6 +67,7 @@ class LatestElectricKwhSensor(SensorEntity):
         self._attr_name = self.meter.get_serial() + " Electricity"
         self._attr_device_class = SensorDeviceClass.ENERGY
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+        self._attr_state_class = "total"
         self._attr_icon = "mdi:meter-electric-outline"
         self._attr_unique_id = self.meter.get_serial() + "__" + "electricity_kwh"
     
@@ -82,9 +83,10 @@ class LatestGasKwhSensor(SensorEntity):
     def __init__(self, meter):
         self.meter = meter
 
-        self._attr_name = self.meter.get_serial() + " Gas"
+        self._attr_name = self.meter.get_serial() + " Gas kWh"
         self._attr_device_class = SensorDeviceClass.ENERGY
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+        self._attr_state_class = "total"
         self._attr_icon = "mdi:meter-gas-outline"
         self._attr_unique_id = self.meter.get_serial() + "__" + "gas_kwh"
     
@@ -103,9 +105,11 @@ class LatestGasCubicMetersSensor(SensorEntity):
         self._attr_name = self.meter.get_serial() + " Gas"
         self._attr_device_class = SensorDeviceClass.GAS
         self._attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
+        self._attr_state_class = "total"
         self._attr_icon = "mdi:meter-gas-outline"
         self._attr_unique_id = self.meter.get_serial() + "__" + "gas_m3"
     
 
     async def async_update(self) -> None:
         self._attr_native_value = await self.meter.get_latest_reading()
+
