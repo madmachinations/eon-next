@@ -1,0 +1,12 @@
+{
+    "domain": "eon_next",
+    "name": "Eon Next",
+    "codeowners": ["@madmachinations"],
+    "dependencies": [],
+    "documentation": "https://gitlab.com/home-assistant-components/eon-next/-/blob/main/README.md",
+    "integration_type": "hub",
+    "iot_class": "cloud_polling",
+    "requirements": [],
+    "version": "0.1.0",
+    "config_flow": true
+  }

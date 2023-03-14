@@ -1,0 +1,17 @@
+{
+    "config": {
+        "error": {
+            "invalid_auth": "Authentication failed"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "email": "Email addresss",
+                    "password": "Password"
+                },
+                "description": "Login to your Eon Next account.",
+                "title": "Login"
+            }
+        }
+    }
+}
