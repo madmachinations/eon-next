@@ -4,6 +4,7 @@
     "codeowners": ["@madmachinations"],
     "dependencies": [],
     "documentation": "https://gitlab.com/home-assistant-components/eon-next/-/blob/main/README.md",
+    "issue_tracker": "https://github.com/madmachinations/eon-next/issues",
     "integration_type": "hub",
     "iot_class": "cloud_polling",
     "requirements": [],
