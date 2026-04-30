@@ -1,0 +1,26 @@
+automation:
+  - alias: "Energy-Smart Device Control"
+    description: "Control hot water immersion and dehumidifier based on electricity rates"
+    trigger:
+      - platform: state
+        entity_id: sensor.account_XXXX_unit_rate  # Replace XXXX with your account number
+        attribute: current_period
+      - platform: state
+        entity_id: sensor.account_XXXX_unit_rate
+        attribute: unit_rate
+    condition:
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: sensor.account_XXXX_unit_rate
+            attribute: current_period
+            state: "Off-Peak"
+          - condition: numeric_state
+            entity_id: sensor.account_XXXX_unit_rate
+            below: 0.15  # Adjust threshold as needed (GBP/kWh)
+    action:
+      - service: switch.turn_on
+        entity_id: switch.hot_water_immersion  # Replace with your hot water switch
+      - service: switch.turn_on
+        entity_id: switch.dehumidifier  # Replace with your dehumidifier switch
+    mode: single

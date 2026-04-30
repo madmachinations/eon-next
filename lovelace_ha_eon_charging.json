@@ -1,0 +1,96 @@
+{
+  "title": "HA Eon charging",
+  "views": [
+    {
+      "title": "Home",
+      "path": "home",
+      "icon": "mdi:ev-station",
+      "cards": [
+        {
+          "type": "markdown",
+          "title": "Status now",
+          "content": "\n## EON / cheap-heat live status\n- **Cheap window:** {{ states('binary_sensor.cheap_electricity_window_active') }}\n- **Reason:** {{ state_attr('binary_sensor.cheap_electricity_window_active', 'reason') or 'n/a' }}\n- **Current rate:** {{ states('sensor.eon_next_current_rate') }} p/kWh\n- **Threshold:** {{ states('input_number.eon_cheap_rate_threshold') }} p/kWh\n- **Tesla schedule:** {{ states('sensor.tesla_model_3_smart_charging_schedule') }}\n- **Next slot:** {{ states('sensor.tesla_model_3_next_charge_start') }} → {{ states('sensor.tesla_model_3_next_charge_end') }}\n- **Hot water:** {{ states('water_heater.hot_water') }}\n- **Immersion:** {{ states('switch.sonoff_10015a9776') }}\n"
+        },
+        {
+          "type": "entities",
+          "title": "Window and tariff",
+          "show_header_toggle": false,
+          "entities": [
+            "input_boolean.enable_dynamic_cheap_charging",
+            "binary_sensor.cheap_electricity_window_active",
+            "input_boolean.eon_next_boost_session",
+            "sensor.smart_meter_current_rate",
+            "sensor.eon_next_current_rate",
+            "input_number.eon_cheap_rate_threshold"
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "EON Tariff Details",
+          "show_header_toggle": false,
+          "entities": [
+            "sensor.eon_next_current_rate",
+            "sensor.account_a_d2bdacdf_unit_rate"
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Tesla charging schedule",
+          "show_header_toggle": false,
+          "entities": [
+            "sensor.tesla_model_3_smart_charging_schedule",
+            "sensor.tesla_model_3_next_charge_start",
+            "sensor.tesla_model_3_next_charge_end",
+            "sensor.tesla_model_3_next_charge_start_2",
+            "sensor.tesla_model_3_next_charge_end_2"
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Hot water and electric heat",
+          "show_header_toggle": false,
+          "entities": [
+            "water_heater.hot_water",
+            "input_boolean.cheap_heat_tado_water_pre_saved",
+            "switch.sonoff_10015a9776",
+            "automation.cheap_heat_hot_water_safety_auto_outside_window"
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Tado gas zones",
+          "show_header_toggle": false,
+          "entities": [
+            "climate.kitchen",
+            "climate.master_bathroom",
+            "climate.kids_bathroom"
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "UFH electric zones",
+          "show_header_toggle": false,
+          "entities": [
+            "climate.kitchen_front",
+            "climate.smart_thermostat",
+            "climate.master_bathroom_2",
+            "climate.kids_bathroom_2",
+            "climate.toilet_downstairs"
+          ]
+        },
+        {
+          "type": "entities",
+          "title": "Automation health",
+          "show_header_toggle": false,
+          "entities": [
+            "automation.cheap_heat_pre_disable_tado_hot_water_before_tesla_slot",
+            "automation.cheap_heat_pre_disable_tado_hot_water_before_cheap_window",
+            "automation.cheap_heat_enable_electric_sources",
+            "automation.cheap_heat_restore_previous_sources",
+            "automation.cheap_heat_morning_safety_restore"
+          ]
+        }
+      ]
+    }
+  ]
+}

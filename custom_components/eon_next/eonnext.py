@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
+import logging
 import aiohttp
 import datetime
 
+_LOGGER = logging.getLogger(__name__)
+
 METER_TYPE_GAS = "gas"
 METER_TYPE_ELECTRIC = "electricity"
+METER_TYPE_EV = "ev"
 METER_TYPE_UNKNOWN = "unknown"
 
 
@@ -19,6 +23,8 @@ class EonNext:
 
     def _json_contains_key_chain(self, data: dict, key_chain: list) -> bool:
         for key in key_chain:
+            if data is None:
+                return False
             if key in data:
                 data = data[key]
             else:
@@ -92,18 +98,30 @@ class EonNext:
     
 
     async def _graphql_post(self, operation: str, query: str, variables: dict={}, authenticated: bool = True) -> dict:
-        use_headers = {}
+        use_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
 
         if authenticated == True:
             use_headers['authorization'] = "JWT " + await self.__auth_token()
 
+        payload = {"operationName": operation, "variables": variables, "query": query}
+        _LOGGER.debug(f"GraphQL Payload: {payload}")
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 "https://api.eonnext-kraken.energy/v1/graphql/",
-                json={"operationName": operation, "variables": variables, "query": query},
+                json=payload,
                 headers=use_headers
             ) as response:
-                return await response.json()
+                try:
+                    json_data = await response.json()
+                    _LOGGER.debug(f"GraphQL Response for {operation}: {json_data}")
+                    return json_data
+                except Exception as e:
+                    text = await response.text()
+                    _LOGGER.error(f"Failed to parse JSON response. Status: {response.status}. Body: {text}")
+                    raise e
     
 
     async def login_with_username_and_password(self, username: str, password: str, initialise: bool = True) -> bool:
@@ -185,6 +203,10 @@ class EonNext:
 
                 account = EnergyAccount(self, account_number)
                 await account._load_meters()
+                await account._load_ev_chargers()
+                await account._load_tariff_data()
+                await account._load_saving_sessions()
+                await account._load_billing_data()
 
                 self.accounts.append(account)
 
@@ -196,7 +218,86 @@ class EnergyAccount:
     def __init__(self, api: EonNext, account_number: str):
         self.api = api
         self.account_number = account_number
+        self.ev_chargers = []
+        self.tariff_data = None
+        self.saving_sessions = []
+        self.billing_data = []
+        self.postcode = ""
     
+
+    async def _load_tariff_data(self):
+        """Load active tariff/agreement details for this account"""
+        result = await self.api._graphql_post(
+            "getAccountAgreements",
+            "query getAccountAgreements($accountNumber: String!) { properties(accountNumber: $accountNumber) { electricityMeterPoints { mpan agreements { id validFrom validTo tariff { __typename ... on TariffType { displayName fullName tariffCode } ... on StandardTariff { unitRate standingCharge } ... on PrepayTariff { unitRate standingCharge } ... on HalfHourlyTariff { unitRates { value validFrom validTo rateType } standingCharge } } } } } }",
+            {
+                "accountNumber": self.account_number
+            }
+        )
+        
+        self.tariff_data = []
+        if self.api._json_contains_key_chain(result, ["data", "properties"]):
+            for prop in result['data']['properties']:
+                if 'electricityMeterPoints' in prop:
+                    for point in prop['electricityMeterPoints']:
+                        mpan = point.get('mpan')
+                        if 'agreements' in point:
+                            for agreement in point['agreements']:
+                                # Inject meterPoint info for sensor compatibility
+                                agreement['meterPoint'] = {'mpan': mpan}
+                                self.tariff_data.append(agreement)
+    
+
+    async def _load_saving_sessions(self):
+        """Load saving session data (similar to Octopus Saving Sessions)"""
+        result = await self.api._graphql_post(
+            "getSavingSessions",
+            "query getSavingSessions($postcode: String!) { appSessions(postcode: $postcode) { edges { node { id startedAt __typename } } } }",
+            {
+                "postcode": self.postcode
+            }
+        )
+        
+        if self.api._json_contains_key_chain(result, ["data", "appSessions", "edges"]):
+            self.saving_sessions = [edge['node'] for edge in result['data']['appSessions']['edges']]
+        else:
+            self.saving_sessions = []
+    
+
+    async def _load_billing_data(self):
+        """Load billing history for the account"""
+        result = await self.api._graphql_post(
+            "getAccountBilling",
+            "query getAccountBilling($accountNumber: String!) { account(accountNumber: $accountNumber) { bills(first: 10) { edges { node { id billDate dueDate amount status } } } } }",
+            {
+                "accountNumber": self.account_number
+            }
+        )
+        
+        if self.api._json_contains_key_chain(result, ["data", "account", "bills", "edges"]):
+            self.billing_data = [edge['node'] for edge in result['data']['account']['bills']['edges']]
+        else:
+            self.billing_data = []
+
+
+    async def _load_ev_chargers(self):
+        result = await self.api._graphql_post(
+            "getAccountDevices",
+            "query getAccountDevices($accountNumber: String!) {\n  devices(accountNumber: $accountNumber) {\n    id\n    provider\n    deviceType\n    status {\n      current\n    }\n    __typename\n    ... on SmartFlexVehicle {\n      make\n      model\n    }\n    ... on SmartFlexChargePoint {\n      make\n      model\n    }\n  }\n}\n",
+            {
+                "accountNumber": self.account_number
+            }
+        )
+
+        if self.api._json_contains_key_chain(result, ["data", "devices"]) == True:
+            for device in result['data']['devices']:
+                # We are interested in devices that are active and are either vehicles or chargers
+                # For now, we'll treat them all as "SmartCharging" entities
+                if device.get('status', {}).get('current') == 'LIVE':
+                    name = f"{device.get('make', 'Unknown')} {device.get('model', 'Device')}"
+                    charger = SmartCharging(self, device['id'], name)
+                    self.ev_chargers.append(charger)
+
 
     async def _load_meters(self):
         result = await self.api._graphql_post(
@@ -213,6 +314,7 @@ class EnergyAccount:
         
         self.meters = []
         for property in result['data']['properties']:
+            self.postcode = property.get('postcode')
 
             for electricity_point in property['electricityMeterPoints']:
                 for meter_config in electricity_point['meters']:
@@ -361,3 +463,56 @@ class GasMeter(EnergyMeter):
         kwh = kwh / 3.6
 
         return round(kwh)
+
+
+class SmartCharging(EnergyMeter):
+
+    def __init__(self, account: EnergyAccount, meter_id: str, serial: str):
+        super().__init__(account, meter_id, serial)
+        self.type = METER_TYPE_EV
+        self.schedule = None
+        self.failed_attempts = 0
+
+
+    def _should_update(self) -> bool:
+        if self.last_updated == None:
+            return True
+
+        now = datetime.datetime.now()
+        # Retry sooner if we had failures (exponential backoff: 1-5 min based on failure count)
+        retry_minutes = min(1 + self.failed_attempts, 5)
+        return (now - self.last_updated) >= datetime.timedelta(minutes=retry_minutes)
+    
+
+    async def _update(self):
+        try:
+            result = await self.api._graphql_post(
+                "getSmartChargingSchedule",
+                "query getSmartChargingSchedule($deviceId: String!) {\n  flexPlannedDispatches(deviceId: $deviceId) {\n    start\n    end\n    type\n    energyAddedKwh\n  }\n}\n",
+                {
+                    "deviceId": self.meter_id
+                }
+            )
+
+            if self.api._json_contains_key_chain(result, ["data", "flexPlannedDispatches"]) == True:
+                new_schedule = result['data']['flexPlannedDispatches']
+                if new_schedule != self.schedule:
+                    _LOGGER.debug(f"SmartCharging schedule updated for {self.serial}: {len(new_schedule)} slots")
+                self.schedule = new_schedule
+                self.failed_attempts = 0  # Reset failure counter on success
+            else:
+                _LOGGER.warning(f"SmartCharging API response missing flexPlannedDispatches for {self.serial}: {result}")
+                self.schedule = []
+                self.failed_attempts += 1
+        except Exception as e:
+            _LOGGER.error(f"SmartCharging._update() failed for {self.serial}: {e}")
+            self.schedule = []
+            self.failed_attempts += 1
+        finally:
+            # Always update timestamp to prevent API hammering on failure
+            self.last_updated = datetime.datetime.now()
+
+    async def get_schedule(self):
+        await self.update()
+        return self.schedule
+

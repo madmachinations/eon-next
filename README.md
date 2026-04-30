@@ -1,15 +1,43 @@
 # Eon Next
 
-This is a custom component for Home Assistant which integrates with the Eon Next API and gets all the meter readings from your accounts.
+This is a custom component for Home Assistant which integrates with the Eon Next API to retrieve meter readings and smart charging schedules from your Eon Next accounts.
 
+## Features
+
+### Meter Readings
 A sensor will be created for each meter showing:
 
-- The latest reading
-- The date the latest reading was taken
+- **Latest Reading**: The most recent consumption value
+- **Reading Date**: When the latest reading was taken
 
-For electric meters the readings are in kWh. For gas meter the readings are in m³.
+For electric meters, readings are displayed in kWh. For gas meters, readings are in m³.
 
-An additional sensor is created for gas meters showing the latest reading in kWh.
+An additional sensor is created for gas meters showing the latest reading converted to kWh using standard calorific values.
+
+### Smart Charging (EV Chargers)
+For each connected smart charger, the following sensors are created:
+
+- **Next Charge Start**: Scheduled start time of the next charging slot
+- **Next Charge End**: Scheduled end time of the next charging slot
+- **Next Charge Start 2**: Scheduled start time of the second charging slot
+- **Next Charge End 2**: Scheduled end time of the second charging slot
+- **Smart Charging Schedule**: Full schedule data for the charger
+
+These sensors allow you to monitor and automate your EV charging based on Eon Next's smart charging recommendations.
+
+### Tariff Information
+For each account, the following tariff sensors are created:
+
+- **Tariff Name**: The display name of your active tariff
+- **Standing Charge**: Daily standing charge in GBP/day
+- **Unit Rate**: Energy unit rate in GBP/kWh
+
+These sensors include additional attributes such as tariff code, valid dates, and meter point information.
+
+### Saving Sessions
+If your account participates in saving sessions (similar to Octopus Energy's scheme):
+
+- **Saving Sessions**: Count of active and upcoming saving sessions, with full session details in attributes including start/end times, reward amounts, and session status
 
 
 ## Installation

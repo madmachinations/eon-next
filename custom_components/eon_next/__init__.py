@@ -18,12 +18,12 @@ async def async_setup_entry(hass, entry):
     success = await api.login_with_username_and_password(entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD])
 
     if success == True:
-
+        # Load account data from EON API (use name-mangled private method)
+        await api._EonNext__init_accounts()
+        
         hass.data[DOMAIN][entry.entry_id] = api
 
-        hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(entry, "sensor")
-        )
+        await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
 
         return True
     
