@@ -11,6 +11,11 @@ For electric meters the readings are in kWh. For gas meter the readings are in m
 
 An additional sensor is created for gas meters showing the latest reading in kWh.
 
+The integration also imports available half-hourly smart-meter consumption into
+Home Assistant long-term statistics. Half-hour intervals are combined into UTC
+hours and refreshed every 12 hours. The Energy Dashboard can use statistics such
+as `eon_next:21l4396307_electricity_consumption` directly.
+
 
 ## Installation
 
