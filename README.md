@@ -1,5 +1,13 @@
 # Eon Next
 
+
+THIS IS DEAD UNTIL I CAN WORK MY WAY AROUND LIMITATIONS EON HAVE PUT IN PLACE.
+
+I CAN GET IT TO AUTHENTICATE, BUT THEY NOW FORCE YOU TO INSTALL THEIR SHIT FUCKING MOBILE APP TO ACCESS YOUR ENERGY USAGE. 
+WEB WILL ONLY GIVE ACCESS TO MONTHLY METER READINGS.
+
+
+
 This is a custom component for Home Assistant which integrates with the Eon Next API and gets all the meter readings from your accounts.
 
 A sensor will be created for each meter showing:
