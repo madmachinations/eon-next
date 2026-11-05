@@ -9,6 +9,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .eonnext import EonNext
 
@@ -32,7 +33,7 @@ class EonNextConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
 
-            en = EonNext()
+            en = EonNext(async_get_clientsession(self.hass))
             success = await en.login_with_username_and_password(
                 user_input[CONF_EMAIL],
                 user_input[CONF_PASSWORD],
