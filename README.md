@@ -18,6 +18,7 @@ A sensor will be created for each meter showing:
 For electric meters the readings are in kWh. For gas meter the readings are in m³.
 
 An additional sensor is created for gas meters showing the latest reading in kWh.
+The integration refreshes the data only every 12 hours (as eon only updates the data every two weeks!)
 
 
 ## Installation
@@ -28,6 +29,7 @@ Next restart Home Assistant.
 
 Setting up this component is done entirely in the UI. Go to your Integration settings, press to add a new integration, and find "Eon Next".
 
-The setup wizard will ask you to enter your account login details, and that is all there is too it!
+The setup wizard no longer asks for log in details (as is being deprecated by eon).  Instead, you will need to follow the instructions on screen (and in the API_KEY.md file on
+how to obtain an then enter a reuse ID.
 
 The integration should now be showing on your list, along with a number of new entities for all the sensors it has created.

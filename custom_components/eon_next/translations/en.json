@@ -1,17 +1,27 @@
 {
     "config": {
         "error": {
-            "invalid_auth": "Authentication failed"
+            "invalid_auth": "E.ON Next rejected this API key.",
+            "cannot_connect": "Failed to connect to E.ON Next. Check logs for details."
         },
         "step": {
             "user": {
+                "title": "E.ON Next Authentication",
+                "description": "E.ON Next no longer allows password logins for accounts moved to its new sign-in, so this integration now uses a per-account **API key** (it starts with `sk_live_`).\n\n**To create one:** while logged in at eonnext.com, run the one-off script in `API_KEY.md` (shipped with this integration) in your browser's DevTools Console. The key is shown only once, so copy it somewhere safe. Each account has a single key shared by every app that uses it; creating a new one stops the old one working.",
                 "data": {
-                    "email": "Email addresss",
-                    "password": "Password"
-                },
-                "description": "Login to your Eon Next account.",
-                "title": "Login"
+                    "api_key": "API key"
+                }
+            },
+            "reauth_confirm": {
+                "title": "Re-authenticate E.ON Next",
+                "description": "E.ON Next no longer allows password logins for accounts moved to its new sign-in, so this integration now uses a per-account **API key** (it starts with `sk_live_`).\n\n**To create one:** while logged in at eonnext.com, run the one-off script in `API_KEY.md` (shipped with this integration) in your browser's DevTools Console. The key is shown only once, so copy it somewhere safe. Each account has a single key shared by every app that uses it; creating a new one stops the old one working.",
+                "data": {
+                    "api_key": "API key"
+                }
             }
+        },
+        "abort": {
+            "reauth_successful": "Re-authentication was successful."
         }
     }
 }

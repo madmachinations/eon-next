@@ -24,8 +24,14 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     api = hass.data[DOMAIN][config_entry.entry_id]
 
     entities = []
+    seen_meters = set()
     for account in api.accounts:
         for meter in account.meters:
+            meter_key = (meter.get_type(), meter.get_serial())
+            if meter_key in seen_meters:
+                continue
+            seen_meters.add(meter_key)
+
             if await meter.has_reading() == True:
 
                 entities.append(LatestReadingDateSensor(meter))
@@ -112,4 +118,3 @@ class LatestGasCubicMetersSensor(SensorEntity):
 
     async def async_update(self) -> None:
         self._attr_native_value = await self.meter.get_latest_reading()
-

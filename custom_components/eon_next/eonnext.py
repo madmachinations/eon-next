@@ -1,18 +1,80 @@
 #!/usr/bin/env python3
 
+import logging
 import aiohttp
 import datetime
+
+_LOGGER = logging.getLogger(__name__)
 
 METER_TYPE_GAS = "gas"
 METER_TYPE_ELECTRIC = "electricity"
 METER_TYPE_UNKNOWN = "unknown"
 
+CONSUMPTION_QUERIES = {
+    METER_TYPE_ELECTRIC: (
+        "getElectricityConsumption",
+        """
+        query getElectricityConsumption($accountNumber: String!, $startDate: DateTime!, $after: String) {
+          account(accountNumber: $accountNumber) {
+            electricityAgreements(active: true) {
+              meterPoint {
+                meters(includeInactive: false) {
+                  id
+                  consumption(
+                    startAt: $startDate
+                    grouping: HALF_HOUR
+                    timezone: "Europe/London"
+                    first: 100
+                    after: $after
+                  ) {
+                    edges { node { startAt endAt value } }
+                    pageInfo { hasNextPage endCursor }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """,
+        "electricityAgreements",
+    ),
+    METER_TYPE_GAS: (
+        "getGasConsumption",
+        """
+        query getGasConsumption($accountNumber: String!, $startDate: DateTime!, $after: String) {
+          account(accountNumber: $accountNumber) {
+            gasAgreements(active: true) {
+              meterPoint {
+                meters(includeInactive: false) {
+                  id
+                  consumption(
+                    startAt: $startDate
+                    grouping: HALF_HOUR
+                    timezone: "Europe/London"
+                    first: 100
+                    after: $after
+                  ) {
+                    edges { node { startAt endAt value } }
+                    pageInfo { hasNextPage endCursor }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """,
+        "gasAgreements",
+    ),
+}
+
 
 class EonNext:
 
-    def __init__(self):
+    def __init__(self, session: aiohttp.ClientSession | None = None):
         self.username = ""
         self.password = ""
+        self.api_key = None
+        self.session = session
         self.__reset_authentation()
         self.__reset_accounts()
     
@@ -80,10 +142,14 @@ class EonNext:
 
     async def __auth_token(self) -> str:
         if self.__auth_token_is_valid() == False:
-            if self.__refresh_token_is_valid() == True:
+            if self.api_key:
+                await self.login_with_api_key(self.api_key, False)
+            elif self.__refresh_token_is_valid() == True:
                 await self.__login_with_refresh_token()
-            else:
-                await self.login_with_username_and_password()
+            elif self.username and self.password:
+                await self.login_with_username_and_password(
+                    self.username, self.password, False
+                )
         
         if self.__auth_token_is_valid() == False:
             raise Exception("Unable to authenticate")
@@ -91,31 +157,131 @@ class EonNext:
         return self.auth['token']['token']
     
 
-    async def _graphql_post(self, operation: str, query: str, variables: dict={}, authenticated: bool = True) -> dict:
-        use_headers = {}
+    async def _graphql_post(
+        self,
+        operation: str,
+        query: str,
+        variables: dict | None = None,
+        authenticated: bool = True,
+    ) -> dict:
+        use_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
 
         if authenticated == True:
             use_headers['authorization'] = "JWT " + await self.__auth_token()
+        
+        payload = {
+            "operationName": operation,
+            "variables": variables or {},
+            "query": query,
+        }
+        _LOGGER.debug("Sending GraphQL request: %s with variables %s", operation, variables)
 
-        async with aiohttp.ClientSession() as session:
+        async def async_post(session):
             async with session.post(
                 "https://api.eonnext-kraken.energy/v1/graphql/",
-                json={"operationName": operation, "variables": variables, "query": query},
+                json=payload,
                 headers=use_headers
             ) as response:
+                response_text = await response.text()
+                if response.status >= 400:
+                    _LOGGER.error("E.ON Next API rejected request (%s): %s", response.status, response_text)
+                response.raise_for_status()
                 return await response.json()
+
+        if self.session is not None:
+            return await async_post(self.session)
+
+        async with aiohttp.ClientSession() as session:
+            return await async_post(session)
+
+    async def get_consumption_data(
+        self,
+        account_number: str,
+        meter_id: str,
+        meter_type: str,
+        start_date: datetime.datetime,
+        end_date: datetime.datetime,
+    ) -> list[dict]:
+        """Return all half-hourly consumption records in a date range."""
+        operation, query, agreements_key = CONSUMPTION_QUERIES[meter_type]
+        start_str = start_date.astimezone(datetime.timezone.utc).isoformat()
+        end_utc = end_date.astimezone(datetime.timezone.utc)
+        cursor = None
+        records = {}
+
+        while True:
+            result = await self._graphql_post(
+                operation,
+                query,
+                {
+                    "accountNumber": account_number,
+                    "startDate": start_str,
+                    "after": cursor,
+                },
+            )
+            if self._json_contains_key_chain(result, ["data", "account"]) is False:
+                raise Exception(
+                    f"Unable to load consumption for meter {meter_id}"
+                )
+
+            connection = None
+            account_data = result["data"]["account"] or {}
+            for agreement in account_data.get(agreements_key, []):
+                meter_point = agreement.get("meterPoint") or {}
+                for meter in meter_point.get("meters", []):
+                    if meter and meter.get("id") == meter_id:
+                        connection = meter.get("consumption")
+                        break
+                if connection is not None:
+                    break
+
+            if connection is None:
+                raise Exception(f"Unable to find consumption for meter {meter_id}")
+
+            reached_end = False
+            for edge in connection.get("edges", []):
+                node = (edge or {}).get("node")
+                if not node or not node.get("startAt"):
+                    continue
+                interval_start = datetime.datetime.fromisoformat(
+                    node["startAt"].replace("Z", "+00:00")
+                )
+                if interval_start.astimezone(datetime.timezone.utc) > end_utc:
+                    reached_end = True
+                    break
+                records[node["startAt"]] = node
+
+            page_info = connection.get("pageInfo", {})
+            next_cursor = page_info.get("endCursor")
+            if (
+                reached_end
+                or not page_info.get("hasNextPage", False)
+                or not next_cursor
+            ):
+                break
+            if next_cursor == cursor:
+                raise Exception(
+                    f"Consumption pagination did not advance for meter {meter_id}"
+                )
+            cursor = next_cursor
+
+        return [records[key] for key in sorted(records)]
     
 
     async def login_with_username_and_password(self, username: str, password: str, initialise: bool = True) -> bool:
         self.username = username
         self.password = password
-        
+               
         result = await self._graphql_post(
             "loginEmailAuthentication",
             "mutation loginEmailAuthentication($input: ObtainJSONWebTokenInput!) {obtainKrakenToken(input: $input) {    payload    refreshExpiresIn    refreshToken    token    __typename}}",
             {
                 "input": {
-                    "email": self.username,
+                    "identifier": self.username,
                     "password": self.password
                 }
             },
@@ -131,6 +297,27 @@ class EonNext:
             self.__reset_authentation()
             return False
     
+
+    async def login_with_api_key(self, api_key: str, initialise: bool = True) -> bool:
+        """Obtain a Kraken JWT from a per-account API key (sk_live_...)."""
+        self.api_key = api_key
+
+        result = await self._graphql_post(
+            "apiKeyAuthentication",
+            "mutation apiKeyAuthentication($input: ObtainJSONWebTokenInput!) {  obtainKrakenToken(input: $input) {    payload    refreshExpiresIn    refreshToken    token    __typename  }}",
+            {"input": {"APIKey": api_key}},
+            False
+        )
+
+        if self._json_contains_key_chain(result, ["data", "obtainKrakenToken", "token"]) == True:
+            self.__store_authentication(result['data']['obtainKrakenToken'])
+            if initialise == True:
+                await self.__init_accounts()
+            return True
+        else:
+            self.__reset_authentation()
+            return False
+
 
     async def login_with_refresh_token(self, token: str) -> bool:
         self.auth['refresh']['token'] = token
@@ -249,6 +436,21 @@ class EnergyMeter:
 
     def get_serial(self) -> str:
         return self.serial
+
+
+    async def get_consumption_data(
+        self,
+        start_date: datetime.datetime,
+        end_date: datetime.datetime,
+    ) -> list[dict]:
+        """Return half-hourly consumption for this meter."""
+        return await self.api.get_consumption_data(
+            self.account.account_number,
+            self.meter_id,
+            self.type,
+            start_date,
+            end_date,
+        )
     
 
     def _should_update(self) -> bool:
